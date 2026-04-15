@@ -1,0 +1,8 @@
+@echo off
+:: الانتقال إلى القرص D
+D:
+:: الدخول إلى المجلد المطلوب
+cd "D:\server_3\interface"
+:: تشغيل ملف البايثون
+python main_gui_222.py
+pause
