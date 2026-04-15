@@ -1,0 +1,9 @@
+opencv-python
+numpy
+uiautomator2
+requests
+psutil
+tk
+supabase
+
+
