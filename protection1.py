@@ -6,6 +6,8 @@ from typing import Optional, Tuple, List, Union, Dict, Callable
 import logging
 import uiautomator2 as u2
 from Path import run_Path , reset_Path
+from Manager_Json import BotDataManager
+from supabase import create_client, Client
 
 def action_for_Ottman(device, x, y):
     time.sleep(120)
@@ -26,6 +28,13 @@ outflow_import_preotec2 = 0
 outflow_import12 = 0
 attempt = 0
 attempt_4 = 0
+
+
+SUPABASE_URL = "https://api.ibraabot.online"   # <-- ضع رابط مشروعك هنا
+SUPABASE_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NTE1MTI0MCwiZXhwIjo0OTMwODI0ODQwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.l6g3dwSSv0gK2Ut0PEEgXj7KSGkmXjZXh66zl7KL8IM"               # <-- ضع مفتاحك هنا
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 # ============================================================================
 # نظام إدارة الخطوات مع إمكانية الرجوع
 # ============================================================================
@@ -325,7 +334,7 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
 
     global my_custom_actions
     if target_icons is None:
-         target_icons = ["image/prev.png", "image/x.png", "image/prev2.png", "image/TryAgainGreen.png", "image/ok.png", "image/Ottman.png"]
+         target_icons = ["image/prev.png", "image/x.png", "image/disable.png", "image/prev2.png", "image/TryAgainGreen.png", "image/ok.png", "image/Ottman.png"]
     
     if custom_actions is None:
         custom_actions = my_custom_actions
@@ -428,6 +437,51 @@ def wait_for_icon_2(device, icon_path: str, screen_region: Tuple[int, int, int, 
     return False
 
 
+
+def update_supabase_column(
+    table: str,
+    update_column: str,
+    update_value,
+    condition_column: str,
+    condition_value
+) -> bool:
+    """
+    تعديل قيمة عمود معين في جدول Supabase بناءً على شرط.
+
+    Args:
+        table           : اسم الجدول في Supabase
+        update_column   : اسم العمود المراد تعديله
+        update_value    : القيمة الجديدة التي سيأخذها العمود
+        condition_column: اسم العمود المستخدم في الشرط (مثل user_id)
+        condition_value : القيمة التي يجب أن يساويها عمود الشرط
+
+    Returns:
+        True  إذا نجحت العملية
+        False إذا حدث خطأ
+
+    مثال:
+        update_supabase_column(
+            table="Accounts",
+            update_column="Protection",
+            update_value=True,
+            condition_column="user_id",
+            condition_value="abc-123"
+        )
+    """
+    try:
+        response = (
+            supabase
+            .table(table)
+            .update({update_column: update_value})
+            .eq(condition_column, condition_value)
+            .execute()
+        )
+        return True
+    except Exception as e:
+        return False
+
+
+
 def Attauck_Clean_fast(device):
     global attempt_4
     attempt_4 += 1
@@ -453,6 +507,7 @@ def Attauck_Clean_fast(device):
 # ============================================================================
 
 def step_1_Clean_fast(device):
+    print(f"✨✨✨{CURRENT_DEVICE}")
     global outflow_import12 
     outflow_import12 += 1
     if outflow_import12 >= 9:
@@ -516,6 +571,19 @@ def step_5_Preotec(device):
         click_coordinates(device , x + 296 , y + 21)
         time.sleep(0.5)
         Clean_fast(device)
+
+        global supabase 
+
+        BotDataManager.set_bot_custom_flag_false(CURRENT_DEVICE)
+        email1 = BotDataManager.get_bot_current_email_index(CURRENT_DEVICE)
+
+        update_supabase_column(
+            table="Accounts",
+            update_column="Protection",
+            update_value=False,
+            condition_column="Email",
+            condition_value=email1
+        )
         return True
     else:
         Clean_fast(device)

@@ -206,7 +206,7 @@ def reset_Hand():
 def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, max_attempts: int = 5) -> bool:
     global my_custom_actions
     if target_icons is None:
-         target_icons = ["image/prev.png", "image/x.png", "image/prev2.png", "image/EventNew.png", "image/ok.png", "image/Ottman.png"]
+         target_icons = ["image/prev.png", "image/x.png", "image/disable.png", "image/prev2.png", "image/EventNew.png", "image/ok.png", "image/Ottman.png"]
     
     if custom_actions is None:
         custom_actions = my_custom_actions

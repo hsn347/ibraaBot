@@ -413,7 +413,7 @@ def check_and_shutdown_if_empty(device_id: str):
 
 
 def REST_POWER():
-    global now , Power_manager1 , email1 , supabase
+    global now , Power_manager1 , supabase
 
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)    
     Power_manager1 = None
@@ -508,24 +508,11 @@ def step_9_2(device):
     return True
 
 def step_10_2(device):
-    global supabase
 
     ProtectionBooleane = BotDataManager.get_bot_custom_flag(DEVICE_ID)
     if ProtectionBooleane:
-        BotDataManager.set_bot_custom_flag_false(DEVICE_ID)
         reset_Protection()
         run_Protection_stage(DEVICE_ID)
-
-        email1 = BotDataManager.get_bot_current_email_index(DEVICE_ID)
-
-        update_supabase_column(
-            table="Accounts",
-            update_column="Protection",
-            update_value=False,
-            condition_column="Email",
-            condition_value=email1
-        )
-
     return True
            
 
