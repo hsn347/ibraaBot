@@ -507,7 +507,6 @@ def Attauck_Clean_fast(device):
 # ============================================================================
 
 def step_1_Clean_fast(device):
-    print(f"✨✨✨{CURRENT_DEVICE}")
     global outflow_import12 
     outflow_import12 += 1
     if outflow_import12 >= 9:
@@ -576,7 +575,6 @@ def step_5_Preotec(device):
 
         BotDataManager.set_bot_custom_flag_false(CURRENT_DEVICE)
         email1 = BotDataManager.get_bot_current_email_index(CURRENT_DEVICE)
-
         update_supabase_column(
             table="Accounts",
             update_column="Protection",
