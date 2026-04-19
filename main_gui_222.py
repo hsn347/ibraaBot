@@ -1149,7 +1149,10 @@ class MainApp(tk.Tk):
                         self.bot_clicked_flags[i] = True
                         self.bot_start_times[i] = time.time()
                         self.last_correct_stages_check[i] = time.time()
-                        self.last_correct_stages_call[i] = time.time()
+                        # ❗ لا نضبط last_correct_stages_call هنا — هذا يخص Correct_Stages حصراً
+                        # إعادة تهيئة عدادات التحقق (البوت بدأ تشغيلاً جديداً)
+                        self._correct_stages_confirm_count[i] = 0
+                        self._correct_stages_first_stop_ts[i] = 0.0
                         self.user_stopped_flags[i] = False
                         self.emulator_rows[i].set_open(True)
                         self._update_emulator_row_status(i)
@@ -1264,20 +1267,23 @@ class MainApp(tk.Tk):
                 threading.Thread(target=_delayed_close_emulator, daemon=True).start()
 
         # ════════════════════════════════════════════════════════════════
-        # نظام التحقق المتعدد المراحل قبل إطلاق Correct_Stages
+        # نظام التحقق الذكي المتعدد المراحل قبل إطلاق Correct_Stages
         # ────────────────────────────────────────────────────────────────
         # الشروط الإجبارية للإطلاق (كلها يجب أن تتحقق):
         #   1) bot_clicked_flags[idx] = True  (اشتغل على يد المستخدم أو النظام)
         #   2) user_stopped_flags[idx] = False (المستخدم لم يضغط إيقاف بنفسه)
-        #   3) يجب أن لا تكون Correct_Stages قد عملت خلال آخر 600 ثانية
+        #   3) يجب أن لا تكون Correct_Stages قد عملت خلال آخر 300 ثانية
         #   4) يجب أن لا يكون هناك pending_correct_check جارٍ بالفعل
-        #   5) يُؤكَّد الإيقاف عبر 3 فحوصات متتالية كل منها بعد 60 ثانية
-        #      (إجمالي توقف حقيقي ≥ 180 ثانية)
+        #
+        # عدد التأكيدات المطلوبة يعتمد على حالة المحاكي:
+        #   ● المحاكي مغلق (is_open=False) → 2 تأكيدَين  × 60 ث = ~120 ث تعافٍ أسرع
+        #   ● المحاكي مفتوح لكن البوت متوقف → 3 تأكيدات × 60 ث = ~180 ث أكثر حذراً
         # ════════════════════════════════════════════════════════════════
-        CORRECT_STAGES_COOLDOWN  = 600.0  # ثانية — فترة الحماية بعد آخر استدعاء
-        CHECK_INTERVAL           = 60.0   # ثانية — الحد الأدنى بين كل دورة فحص
-        REQUIRED_CONFIRM_COUNT   = 3      # عدد الفحوصات المتتالية المطلوبة
-        CONFIRM_INTERVAL         = 60.0   # ثانية — المسافة بين كل فحصين متتاليين
+        CORRECT_STAGES_COOLDOWN        = 300.0  # ثانية — فترة الحماية بعد آخر استدعاء
+        CHECK_INTERVAL                 = 60.0   # ثانية — الحد الأدنى بين كل دورة فحص
+        CONFIRM_INTERVAL               = 60.0   # ثانية — المسافة بين كل فحصين متتاليين
+        REQUIRED_CONFIRM_EMULATOR_OFF  = 2      # محاكي مغلق  → أسرع
+        REQUIRED_CONFIRM_BOT_ONLY      = 3      # بوت متوقف فقط → أكثر حذراً
 
         for idx, row in enumerate(self.emulator_rows):
 
@@ -1313,6 +1319,13 @@ class MainApp(tk.Tk):
             self._clear_status_cache(idx)  # أجبر على قراءة جديدة بدون cache
             status = self._get_integrated_bot_status(idx)
             is_running = bool(status and status.get('is_running', False))
+            emulator_off = not row.is_open  # المحاكي مغلق فيزيائياً (من ADB)
+
+            # ── تحديد عدد التأكيدات المطلوبة حسب حالة المحاكي ──
+            required_confirms = (
+                REQUIRED_CONFIRM_EMULATOR_OFF if emulator_off
+                else REQUIRED_CONFIRM_BOT_ONLY
+            )
 
             # ── إذا البوت يعمل فعلاً → أعد العداد ──
             if is_running:
@@ -1325,7 +1338,7 @@ class MainApp(tk.Tk):
             self.last_correct_stages_check[idx] = now_ts
 
             if self._correct_stages_confirm_count[idx] == 0:
-                # أول مرة نرصد فيها الإيقاف → سجّل الوقت وابدأ العاد
+                # أول مرة نرصد فيها الإيقاف → سجّل الوقت وابدأ العدّ
                 self._correct_stages_first_stop_ts[idx] = now_ts
                 self._correct_stages_confirm_count[idx] = 1
                 # لا تُطلق Correct_Stages بعد — انتظر الفحوصات القادمة
@@ -1340,14 +1353,18 @@ class MainApp(tk.Tk):
 
             self._correct_stages_confirm_count[idx] += 1
 
-            if self._correct_stages_confirm_count[idx] >= REQUIRED_CONFIRM_COUNT:
-                # ✅ اكتملت جميع الفحوصات — الإيقاف مؤكد → أطلق Correct_Stages
+            if self._correct_stages_confirm_count[idx] >= required_confirms:
+                # ✅ اكتملت الفحوصات المطلوبة — الإيقاف مؤكد → أطلق Correct_Stages
+                reason = "محاكي مغلق" if emulator_off else "بوت متوقف"
                 self._correct_stages_confirm_count[idx] = 0
                 self._correct_stages_first_stop_ts[idx] = 0.0
                 self.pending_correct_checks[idx] = True
 
-                def _fire_correct(i=idx):
+                def _fire_correct(i=idx, r=reason):
                     try:
+                        self._append_status_threadsafe(
+                            f"[Protection] 🔁 تشغيل Correct_Stages لبوت {i+1} (سبب: {r})"
+                        )
                         self.Correct_Stages(i)
                     finally:
                         self.pending_correct_checks[i] = False
@@ -1451,8 +1468,12 @@ class MainApp(tk.Tk):
 
             self.bot_processes[idx] = p
             self.bot_start_times[idx] = time.time()
-            # منع استدعاء Correct_Stages مباشرة بعد التشغيل
+            # تأجيل أول فحص Correct_Stages لمدة 60 ثانية حتى يستقر البوت
             self.last_correct_stages_check[idx] = time.time()
+            # ❗ لا نضبط last_correct_stages_call هنا — هذا يخص Correct_Stages حصراً
+            # إعادة تهيئة عدادات التحقق (البوت بدأ تشغيلاً جديداً)
+            self._correct_stages_confirm_count[idx] = 0
+            self._correct_stages_first_stop_ts[idx] = 0.0
             self._clear_status_cache(idx)  # مسح cache عند بدء البوت
             self.show_toast(f"تم تشغيل البوت على LDPlayer-{idx+1}")
             self._update_emulator_row_status(idx)
