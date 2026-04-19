@@ -516,6 +516,11 @@ class MainApp(tk.Tk):
         self.last_fire_stages_call = [0.0] * NUM_EMULATORS  # timestamp of last Fire_Stages call
         # منع تكرار فحوصات Correct_Stages المؤجلة لكل بوت
         self.pending_correct_checks = [False] * NUM_EMULATORS
+        # عداد مراحل التحقق المتعدد قبل إطلاق Correct_Stages
+        # القيمة: عدد الفحوصات المتتالية التي أكدت أن البوت متوقف
+        self._correct_stages_confirm_count = [0] * NUM_EMULATORS
+        # وقت أول فحص أكّد الإيقاف (للتحقق من الحد الأدنى للوقت)
+        self._correct_stages_first_stop_ts = [0.0] * NUM_EMULATORS
         
         # تحسينات الأداء - cache للحالات
         self._status_cache = [None] * NUM_EMULATORS  # cache للحالات
@@ -1258,49 +1263,96 @@ class MainApp(tk.Tk):
                         print(f"[_auto_update] ❌ خطأ في إغلاق المحاكي {emulator_idx+1}: {e}")
                 threading.Thread(target=_delayed_close_emulator, daemon=True).start()
 
+        # ════════════════════════════════════════════════════════════════
+        # نظام التحقق المتعدد المراحل قبل إطلاق Correct_Stages
+        # ────────────────────────────────────────────────────────────────
+        # الشروط الإجبارية للإطلاق (كلها يجب أن تتحقق):
+        #   1) bot_clicked_flags[idx] = True  (اشتغل على يد المستخدم أو النظام)
+        #   2) user_stopped_flags[idx] = False (المستخدم لم يضغط إيقاف بنفسه)
+        #   3) يجب أن لا تكون Correct_Stages قد عملت خلال آخر 600 ثانية
+        #   4) يجب أن لا يكون هناك pending_correct_check جارٍ بالفعل
+        #   5) يُؤكَّد الإيقاف عبر 3 فحوصات متتالية كل منها بعد 60 ثانية
+        #      (إجمالي توقف حقيقي ≥ 180 ثانية)
+        # ════════════════════════════════════════════════════════════════
+        CORRECT_STAGES_COOLDOWN  = 600.0  # ثانية — فترة الحماية بعد آخر استدعاء
+        CHECK_INTERVAL           = 60.0   # ثانية — الحد الأدنى بين كل دورة فحص
+        REQUIRED_CONFIRM_COUNT   = 3      # عدد الفحوصات المتتالية المطلوبة
+        CONFIRM_INTERVAL         = 60.0   # ثانية — المسافة بين كل فحصين متتاليين
+
         for idx, row in enumerate(self.emulator_rows):
-            # تخطي الفحص إذا لم يمر 60 ثانية منذ آخر فحص
-            if (now_ts - self.last_correct_stages_check[idx]) < 60.0:
-                continue
-                
-            # فحص سريع: إذا لم يتم النقر على تشغيل البوت، تخطي
+
+            # ── الشرط الأساسي: يجب أن يكون البوت قد شُغّل وألا يكون المستخدم أوقفه ──
             if not self.bot_clicked_flags[idx]:
+                # البوت لم يُشغَّل أصلاً → أعد العداد وتخطَّ
+                self._correct_stages_confirm_count[idx] = 0
+                self._correct_stages_first_stop_ts[idx] = 0.0
                 continue
-                
-            # فحص حالة البوت مع cache محسّن
+
+            if self.user_stopped_flags[idx]:
+                # المستخدم أوقفه بنفسه → أعد العداد وتخطَّ
+                self._correct_stages_confirm_count[idx] = 0
+                self._correct_stages_first_stop_ts[idx] = 0.0
+                continue
+
+            # ── حماية فترة الراحة بعد آخر استدعاء ──
+            if (now_ts - self.last_correct_stages_call[idx]) < CORRECT_STAGES_COOLDOWN:
+                # لم يمر 600 ثانية بعد → أعد العداد (قد يكون البوت لا يزال يُعيد التشغيل)
+                self._correct_stages_confirm_count[idx] = 0
+                self._correct_stages_first_stop_ts[idx] = 0.0
+                continue
+
+            # ── منع تكرار الفحص المتعدد إذا كان جارياً بالفعل ──
+            if self.pending_correct_checks[idx]:
+                continue
+
+            # ── حد الدورة: فحص مرة واحدة على الأقل كل CHECK_INTERVAL ──
+            if (now_ts - self.last_correct_stages_check[idx]) < CHECK_INTERVAL:
+                continue
+
+            # ── الآن نجمع معلومات الحالة الفعلية ──
+            self._clear_status_cache(idx)  # أجبر على قراءة جديدة بدون cache
             status = self._get_integrated_bot_status(idx)
             is_running = bool(status and status.get('is_running', False))
-            user_stopped = self.user_stopped_flags[idx]
-            
-            # الشرط الأصلي: المحاكي مغلق + تم النقر على تشغيل البوت
-            original_condition = not row.is_open and self.bot_clicked_flags[idx]
-            
-            # الشرط الجديد: البوت غير شغال + المستخدم لم يضغط على إيقاف + تم النقر على تشغيل البوت
-            new_condition = (not is_running) and self.bot_clicked_flags[idx]
-            
-            if original_condition:
-                # تنفيذ Correct_Stages مباشرة دون التحقق من is_running (تشغيلها في خيط منفصل)
+
+            # ── إذا البوت يعمل فعلاً → أعد العداد ──
+            if is_running:
+                self._correct_stages_confirm_count[idx] = 0
+                self._correct_stages_first_stop_ts[idx] = 0.0
                 self.last_correct_stages_check[idx] = now_ts
-                threading.Thread(target=self.Correct_Stages, args=(idx,), daemon=True).start()
-            elif new_condition:
-                # نفس السلوك الحالي: جدولة تحقق مؤجل مع التحقق من is_running
-                self.last_correct_stages_check[idx] = now_ts
-                if not self.pending_correct_checks[idx]:
-                    self.pending_correct_checks[idx] = True
-                    def _delayed_correct_check(i=idx):
-                        try:
-                            time.sleep(10)
-                            # إعادة التحقق من حالة البوت بعد الانتظار
-                            status2 = self._get_integrated_bot_status(i)
-                            is_running2 = bool(status2 and status2.get('is_running', False))
-                            if (not is_running2) and self.bot_clicked_flags[i]:
-                                # تحديث الطابع الزمني ثم تنفيذ Correct_Stages في خيط منفصل
-                                self.last_correct_stages_check[i] = time.time()
-                                threading.Thread(target=self.Correct_Stages, args=(i,), daemon=True).start()
-                            # إذا كان يعمل، لا نفعل شيئًا
-                        finally:
-                            self.pending_correct_checks[i] = False
-                    threading.Thread(target=_delayed_correct_check, daemon=True).start()
+                continue
+
+            # ── البوت متوقف: زد عداد التأكيد ──
+            self.last_correct_stages_check[idx] = now_ts
+
+            if self._correct_stages_confirm_count[idx] == 0:
+                # أول مرة نرصد فيها الإيقاف → سجّل الوقت وابدأ العاد
+                self._correct_stages_first_stop_ts[idx] = now_ts
+                self._correct_stages_confirm_count[idx] = 1
+                # لا تُطلق Correct_Stages بعد — انتظر الفحوصات القادمة
+                continue
+
+            # تأكد أن الوقت الكافي مرّ منذ آخر فحص تأكيد (60 ثانية)
+            time_since_first = now_ts - self._correct_stages_first_stop_ts[idx]
+            expected_min_elapsed = self._correct_stages_confirm_count[idx] * CONFIRM_INTERVAL
+            if time_since_first < expected_min_elapsed:
+                # لم يمر الوقت الكافي بعد بين الفحوصات
+                continue
+
+            self._correct_stages_confirm_count[idx] += 1
+
+            if self._correct_stages_confirm_count[idx] >= REQUIRED_CONFIRM_COUNT:
+                # ✅ اكتملت جميع الفحوصات — الإيقاف مؤكد → أطلق Correct_Stages
+                self._correct_stages_confirm_count[idx] = 0
+                self._correct_stages_first_stop_ts[idx] = 0.0
+                self.pending_correct_checks[idx] = True
+
+                def _fire_correct(i=idx):
+                    try:
+                        self.Correct_Stages(i)
+                    finally:
+                        self.pending_correct_checks[i] = False
+
+                threading.Thread(target=_fire_correct, daemon=True).start()
         # Fire_Stages trigger conditions
         # 1) is_running == False
         # 2) user didn't click Stop (user_stopped_flags[idx] is False)
@@ -1528,11 +1580,11 @@ class MainApp(tk.Tk):
                 with open(status_file, 'r', encoding='utf-8') as f:
                     status = json.load(f)
                 
-                # فحص heartbeat (30 ثانية نافذة السماح)
+                # فحص heartbeat (120 ثانية نافذة السماح - رُفعت لمنع الإطلاق المبكر)
                 heartbeat_ts = status.get('heartbeat_ts', 0)
                 if heartbeat_ts > 0:
                     time_since_heartbeat = now - float(heartbeat_ts)
-                    if time_since_heartbeat > 30:  # 30 ثانية بدون heartbeat = متوقف
+                    if time_since_heartbeat > 120:  # 120 ثانية بدون heartbeat = متوقف فعلاً
                         status = {'is_running': False, 'status': 'متوقف (انقطاع heartbeat)'}
                         self._status_cache[idx] = status
                         self._last_status_check[idx] = now
