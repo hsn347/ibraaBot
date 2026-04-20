@@ -1,5 +1,10 @@
 
 import cv2
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def cached_imread(image_path):
+    return cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 import numpy as np
 import time
 import threading
@@ -189,7 +194,7 @@ def find_icon(device, icon_paths: Union[str, List[str]],
             # البحث في كل أيقونة
             for icon_path in icon_paths:
                 try:
-                    icon = cv2.imread(icon_path, cv2.IMREAD_GRAYSCALE)
+                    icon = cached_imread(icon_path)
                     if icon is None:
                         continue
                         

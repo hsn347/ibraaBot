@@ -1,4 +1,9 @@
 import cv2
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def cached_imread(image_path):
+    return cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 import numpy as np
 import time
 import threading
@@ -244,7 +249,7 @@ def find_icon(device, icon_paths: Union[str, List[str]],
             # البحث في كل أيقونة
             for icon_path in icon_paths:
                 try:
-                    icon = cv2.imread(icon_path, cv2.IMREAD_GRAYSCALE)
+                    icon = cached_imread(icon_path)
                     if icon is None:
                         continue
                         
@@ -333,7 +338,7 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
             
             for icon_path in target_icons:
                 try:
-                    icon = cv2.imread(icon_path, cv2.IMREAD_GRAYSCALE)
+                    icon = cached_imread(icon_path)
                     if icon is None:
                         continue
                         
@@ -522,7 +527,7 @@ def find_multiple_icons(device, icon_paths: List[str],
                     break
                     
                 try:
-                    icon = cv2.imread(icon_path, cv2.IMREAD_GRAYSCALE)
+                    icon = cached_imread(icon_path)
                     if icon is None:
                         continue
                     

@@ -1,4 +1,9 @@
 import cv2
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def cached_imread(image_path):
+    return cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 import numpy as np
 import time
 import threading
@@ -33,7 +38,12 @@ attempt_4 = 0
 SUPABASE_URL = "https://api.ibraabot.online"   # <-- ضع رابط مشروعك هنا
 SUPABASE_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NTE1MTI0MCwiZXhwIjo0OTMwODI0ODQwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.l6g3dwSSv0gK2Ut0PEEgXj7KSGkmXjZXh66zl7KL8IM"               # <-- ضع مفتاحك هنا
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+_supabase_client = None
+def get_supabase():
+    global _supabase_client
+    if _supabase_client is None:
+        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return _supabase_client
 
 # ============================================================================
 # نظام إدارة الخطوات مع إمكانية الرجوع
@@ -268,7 +278,7 @@ def find_icon(device, icon_paths: Union[str, List[str]],
             # البحث في كل أيقونة
             for icon_path in icon_paths:
                 try:
-                    icon = cv2.imread(icon_path, cv2.IMREAD_GRAYSCALE)
+                    icon = cached_imread(icon_path)
                     if icon is None:
                         continue
                         
@@ -360,7 +370,7 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
             
             for icon_path in target_icons:
                 try:
-                    icon = cv2.imread(icon_path, cv2.IMREAD_GRAYSCALE)
+                    icon = cached_imread(icon_path)
                     if icon is None:
                         continue
                         
@@ -470,7 +480,7 @@ def update_supabase_column(
     """
     try:
         response = (
-            supabase
+            get_supabase()
             .table(table)
             .update({update_column: update_value})
             .eq(condition_column, condition_value)
@@ -570,8 +580,6 @@ def step_5_Preotec(device):
         click_coordinates(device , x + 296 , y + 21)
         time.sleep(0.5)
         Clean_fast(device)
-
-        global supabase 
 
         BotDataManager.set_bot_custom_flag_false(CURRENT_DEVICE)
         email1 = BotDataManager.get_bot_current_email_index(CURRENT_DEVICE)

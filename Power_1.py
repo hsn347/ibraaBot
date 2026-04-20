@@ -30,7 +30,12 @@ from Bounes import run_Bounes_stage , reset_Bounes
 SUPABASE_URL = "https://api.ibraabot.online"   # <-- ضع رابط مشروعك هنا
 SUPABASE_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NTE1MTI0MCwiZXhwIjo0OTMwODI0ODQwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.l6g3dwSSv0gK2Ut0PEEgXj7KSGkmXjZXh66zl7KL8IM"               # <-- ضع مفتاحك هنا
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+_supabase_client = None
+def get_supabase():
+    global _supabase_client
+    if _supabase_client is None:
+        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return _supabase_client
 
 # ============================================================================
 # دالة مساعدة لتعديل قيمة عمود في Supabase بناءً على شرط تساوي عمود آخر
@@ -68,7 +73,7 @@ def update_supabase_column(
     """
     try:
         response = (
-            supabase
+            get_supabase()
             .table(table)
             .update({update_column: update_value})
             .eq(condition_column, condition_value)
@@ -120,7 +125,7 @@ def fetch_supabase_data(
     """
     try:
         response = (
-            supabase
+            get_supabase()
             .table(table)
             .select(select_columns)
             .eq(condition_column, condition_value)
@@ -413,9 +418,8 @@ def check_and_shutdown_if_empty(device_id: str):
 
 
 def REST_POWER():
-    global now , Power_manager1 , supabase
+    global now , Power_manager1
 
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)    
     Power_manager1 = None
     now = None
 

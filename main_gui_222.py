@@ -12,6 +12,7 @@ import traceback
 import sys
 import multiprocessing
 from typing import Optional, Dict, Any
+import gc
 
 # ============================================================================
 # إخفاء نافذة الأوامر وإيقاف جميع رسائل الطباعة
@@ -68,9 +69,14 @@ def _sb_save_config(data: dict):
         pass
 
 
+_supabase_client = None
+
 def _sb_client():
-    from supabase import create_client
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    global _supabase_client
+    if _supabase_client is None:
+        from supabase import create_client
+        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return _supabase_client
 
 
 def _sb_check_and_reset_is_change(server_index: int) -> bool:
@@ -2071,11 +2077,14 @@ class MainApp(tk.Tk):
                 comp.destroy()
             self.bot_villages[bot_idx]["components"].clear()
             
+            # إجبار جامع القمامة على تنظيف الذاكرة بعد مسح الواجهة
+            gc.collect()
+            
             # تحميل الحسابات الجديدة
             self.load_villages(bot_idx)
             
-            # الانتقال إلى تبويب الحسابات
-            self.notebook.select(1)  # تبويب الحسابات الموحد
+            # تم إيقاف الانتقال إلى تبويب الحسابات تلقائيا لتجنب التحميل الزائد للواجهة
+            # self.notebook.select(1)  # تبويب الحسابات الموحد
             
         except Exception as e:
             print(f"خطأ في تحديث واجهة البوت {bot_idx + 1}: {e}")
