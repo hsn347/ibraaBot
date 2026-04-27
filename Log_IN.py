@@ -27,7 +27,7 @@ my_custom_actions = {
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DEVICE_ID = "127.0.0.1:5555"
+DEVICE_ID = "127.0.0.1:5665"
 
 CURRENT_DEVICE = None
 
@@ -428,7 +428,7 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
 
     global my_custom_actions
     if target_icons is None:
-         target_icons = ["image/prev.png", "image/x.png", "image/disable.png", "image/prev2.png", "image/TryAgainGreen.png", "image/ok.png", "image/Ottman.png"]
+         target_icons = ["image/prev.png", "image/x.png", "image/disable.png", "image/prev2.png","image/head12.png", "image/TryAgainGreen.png", "image/ok.png", "image/Ottman.png"]
     
     if custom_actions is None:
         custom_actions = my_custom_actions
