@@ -436,7 +436,7 @@ def step_3_LORD2(device):
     if result_Hammer:
         x , y = result_Hammer
         click_coordinates(device , x , y)
-        time.sleep(0.2)
+        time.sleep(0.5)
         click_coordinates(device , 610 , 150)
         result_LORD2 = wait_for_icon_coordinates(device, "image/LORD2.png" ,screen_region=(0, 300, 720, 675),timeout=2)
         if result_LORD2:

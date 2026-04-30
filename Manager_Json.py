@@ -471,6 +471,50 @@ class BotDataManager:
         return f"bot_data/bot_{bot_number}_villages.json"
 
     @staticmethod
+    def get_animal_by_device(device):
+        """
+        يجلب قيمة حقل animal للحساب الحالي بناءً على منفذ المحاكي.
+
+        Args:
+            device: منفذ المحاكي (مثال: "127.0.0.1:5555")
+
+        Returns:
+            str: قيمة حقل animal للحساب الحالي، أو "" إذا لم توجد.
+        """
+        try:
+            bot_number = BotDataManager.get_device_bot_number(device)
+            json_file  = BotDataManager._get_json_file(bot_number)
+
+            if not os.path.exists(json_file):
+                return ""
+
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            villages = data.get("villages", [])
+            if not villages:
+                return ""
+
+            index = data.get("account_index", 0)
+
+            # account_index == 0 يشير إلى آخر حساب في القائمة
+            if index == 0:
+                target = len(villages) - 1
+            else:
+                target = index - 1
+
+            # تأكد من أن الفهرس ضمن النطاق
+            if 0 <= target < len(villages):
+                return villages[target].get("animal", "")
+
+            return ""
+
+        except Exception as e:
+            print(f"[get_animal_by_device] خطأ: {e}")
+            return ""
+
+
+    @staticmethod
     def load_bot_data(bot_number):
         """تحميل بيانات البوت مع حماية من القراءة المتزامنة"""
         json_file = BotDataManager._get_json_file(bot_number)
@@ -873,6 +917,52 @@ class BotDataManager:
         return 0
 
     @staticmethod
+    def get_bot_animal_run_count(device, bot_number=None):
+        """إرجاع عدد مرات تشغيل animal للحساب الحالي في اليوم الحالي"""
+        try:
+            if bot_number is None:
+                bot_number = BotDataManager.get_device_bot_number(device)
+            index = BotDataManager.get_account_index(device, bot_number)
+            data = BotDataManager.load_bot_data(bot_number)
+            villages = data.get("villages", [])
+            if 0 <= index < len(villages):
+                account = villages[index]
+                today = datetime.now().strftime("%Y-%m-%d")
+                last_date = account.get("last_animal_date", "")
+                if last_date != today:
+                    return 0
+                return account.get("animal_run_count", 0)
+        except Exception as e:
+            print(f"[DEBUG] Error in get_bot_animal_run_count: {e}")
+        return 0
+
+    @staticmethod
+    def increment_bot_animal_run_count(device, bot_number=None):
+        """زيادة عدد مرات تشغيل animal وتحديث التاريخ"""
+        try:
+            if bot_number is None:
+                bot_number = BotDataManager.get_device_bot_number(device)
+            index = BotDataManager.get_account_index(device, bot_number)
+            data = BotDataManager.load_bot_data(bot_number)
+            villages = data.get("villages", [])
+            if 0 <= index < len(villages):
+                account = villages[index]
+                today = datetime.now().strftime("%Y-%m-%d")
+                last_date = account.get("last_animal_date", "")
+                
+                if last_date != today:
+                    account["animal_run_count"] = 1
+                    account["last_animal_date"] = today
+                else:
+                    account["animal_run_count"] = account.get("animal_run_count", 0) + 1
+                
+                BotDataManager.save_bot_data(bot_number, data)
+                return account["animal_run_count"]
+        except Exception as e:
+            print(f"[DEBUG] Error in increment_bot_animal_run_count: {e}")
+        return 0
+
+    @staticmethod
     def get_bot_Not_Store(device, bot_number=None):
         """إرجاع قيمة Not_Store من ملف JSON الخاص بالبوت حسب account_index"""
         try:
@@ -1179,5 +1269,4 @@ def find_index(lst, value):
         return lst.index(value)
     except ValueError:
         return -1
-
 

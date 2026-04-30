@@ -154,6 +154,7 @@ def _sb_to_village(account: dict) -> dict:
         "custom_flag": bool(account.get("Protection", False)),
         "Troops"     : bool(account.get("Troops",     False)),
         "Not_Store"  : bool(account.get("Not_store",  False)),
+        "animal"     : account.get("animal", ""),
     }
 
 

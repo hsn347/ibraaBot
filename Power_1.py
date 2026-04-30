@@ -22,6 +22,7 @@ from protection1 import run_Protection_stage ,reset_Protection
 from Troops1 import run_troops_stage, reset_Troops
 from Treasure import run_treasure_stage , reset_Treasure
 from Bounes import run_Bounes_stage , reset_Bounes
+from animal import run_animal , reset_animal
 
 # ============================================================================
 # Supabase Client
@@ -454,6 +455,9 @@ def step_2_2(device):
 def step_3_2(device):
     reset_Email()
     run_email_stage(DEVICE_ID)
+
+    
+
     return True
 
 def step_4_2(device):
@@ -477,6 +481,16 @@ def step_7_2(device):
 
     reset_Alliance()
     run_Alliance_stage(DEVICE_ID)
+
+    animal = BotDataManager.get_animal_by_device(DEVICE_ID)
+
+    if animal != "":
+        run_count = BotDataManager.get_bot_animal_run_count(DEVICE_ID)
+        if run_count < 4:
+            reset_animal()
+            run_animal(DEVICE_ID)
+            BotDataManager.increment_bot_animal_run_count(DEVICE_ID)
+            return True
 
     TroopsBooleane = BotDataManager.get_bot_Troops(DEVICE_ID)
     if TroopsBooleane:
