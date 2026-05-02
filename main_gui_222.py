@@ -46,7 +46,7 @@ _CONFIG_FILE     = os.path.join(_BASE_DIR, "supabase_gui_config.json")
 _BOT_DATA_DIR    = os.path.join(_BASE_DIR, "bot_data")
 
 SUPABASE_URL     = "https://api.ibraabot.online"    # ← عدّل حسب مشروعك
-SUPABASE_KEY     = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NTE1MTI0MCwiZXhwIjo0OTMwODI0ODQwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.l6g3dwSSv0gK2Ut0PEEgXj7KSGkmXjZXh66zl7KL8IM"  # ← عدّل
+SUPABASE_KEY     = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NzcxMDU0MCwiZXhwIjo0OTMzMzg0MTQwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.5YPFg6hg9F34hPdX0IetqgAeRZ8ZfjpUerSzhIKAsBE"  # ← عدّل
 ACCOUNTS_PER_EMULATOR = 13
 AUTO_FETCH_INTERVAL   = 3600  # ثانية (= ساعة)
 
