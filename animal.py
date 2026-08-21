@@ -13,6 +13,7 @@ import uiautomator2 as u2
 from Path import run_Path , reset_Path
 import subprocess
 import sys
+from Manager_Json import BotDataManager
 
 def action_for_Ottman(device, x, y):
     time.sleep(120)
@@ -26,12 +27,13 @@ my_custom_actions = {
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DEVICE_ID = "127.0.0.1:5615"
+DEVICE_ID = "127.0.0.1:5555"
 
 CURRENT_DEVICE = None
 
 outflow_import = 0 
 outflow_import2 = 0 
+outflow_import6 = 0 
 attempt = 0
 
 # ============================================================================
@@ -193,14 +195,15 @@ class TroopsManager6:
             step = self.steps[step_num]
             result = self.step_results.get(step_num, "لم يتم التنفيذ")
 
-def reset_Loot():
-    global outflow_import , outflow_import2 , CURRENT_DEVICE , loot_manager , attempt
+def reset_animal():
+    global outflow_import , outflow_import2 , outflow_import6 , CURRENT_DEVICE , animal_manager , attempt
 
     attempt = 0
     CURRENT_DEVICE = None
     outflow_import = 0 
     outflow_import2 = 0 
-    loot_manager = None
+    outflow_import6 = 0
+    animal_manager = None
 
 # ============================================================================
 # دوال مساعدة للخطوات
@@ -458,8 +461,8 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
             reset_Path()
             run_Path(CURRENT_DEVICE)
             Clean_fast(device, target_icons, custom_actions, max_attempts)
-            if 'loot_manager' in globals() and loot_manager is not None:
-                return loot_manager.stop_execution()
+            if 'animal_manager' in globals() and animal_manager is not None:
+                return animal_manager.stop_execution()
             return False
 
         found_any = False
@@ -521,6 +524,34 @@ def click_coordinates(device, x: int, y: int) -> bool:
         return True
     except Exception as e:
         return False
+
+def click_coordinates_repeat(device, x: int, y: int, times: int, delay: float = 0.3) -> bool:
+    """
+    ينقر على الإحداثيات (x, y) عدد (times) من المرات.
+    إذا كان times == 0 لا يتم النقر أبداً وتنتهي الدالة فوراً.
+
+    Args:
+        device : الجهاز المستهدف
+        x      : الإحداثي الأفقي
+        y      : الإحداثي الرأسي
+        times  : عدد مرات النقر (0 = لا نقر)
+        delay  : الانتظار بين كل نقرة والتالية بالثواني (افتراضي 0.3)
+
+    Returns:
+        bool: True إذا نجحت جميع النقرات، False إذا حدث خطأ
+    """
+    if times == 0:
+        return True
+
+    try:
+        for _ in range(times):
+            device.click(x, y)
+            if _ < times - 1:
+                time.sleep(delay)
+        return True
+    except Exception as e:
+        return False
+
 
 def scroll_device(device, x1: int, y1: int, x2: int, y2: int, scroll_speed: int = 1000) -> bool:
 
@@ -633,7 +664,7 @@ def step_1_Clean_fast(device):
     if outflow_import >= 10:
         outflow_import = 0
         Clean_fast(device)
-        return loot_manager.stop_execution()
+        return animal_manager.stop_execution()
 
     return Clean_fast(device)
 
@@ -644,7 +675,7 @@ def step_2_open_loot_menu(device):
     if result2:
         return True
     else: 
-        return loot_manager.go_to_step_and_continue(1)
+        return animal_manager.go_to_step_and_continue(1)
 
 def step_3_Result_Loot(device):
     global outflow_import2 
@@ -652,135 +683,113 @@ def step_3_Result_Loot(device):
     if outflow_import2 >= 10:
         outflow_import2 = 0
         Clean_fast(device)
-        return loot_manager.stop_execution()
+        return animal_manager.stop_execution()
 
-    scroll_device(device, 250, 1000, 250, 800 , 300)
+    scroll_device(device, 250, 1000, 250, 850 , 300)
     time.sleep(1)
     click_coordinates(device , 250 , 700)
     time.sleep(0.4)
-    result_loot_1 = wait_for_icon_coordinates_custom_thresholds(device ,"image/loot.png" ,screen_region=(0, 100, 250, 1280) , timeout=1.5 ,thresholds=[0.7])
+
+    result_loot_1 = wait_for_icon_coordinates_custom_thresholds(device ,"image/house.png" ,screen_region=(0, 100, 250, 1280) , timeout=1.5 ,thresholds=[0.7])
     if result_loot_1:
-        x , y = result_loot_1 
-        click_coordinates(device , x + 354 , y + 62 )
-        time.sleep(1)
-        return True
+        x , y = result_loot_1
+        coreTrian = wait_for_icon_coordinates(device, "image/patrolling.png", screen_region=(x+298, y+30, x+438, y+94) ,timeout=2)
+        if coreTrian:
+            click_coordinates(device , 445 , 1240)
+            return animal_manager.stop_execution()
+
+        coreGo = wait_for_icon_coordinates(device, "image/GoTroo2.png", screen_region=(x+298, y+30, x+438, y+94) , timeout=3)
+        if coreGo:
+            x1 , y1 = coreGo
+            click_coordinates(device, x1, y1)
+            time.sleep(1.5)
+            return animal_manager.go_to_step_and_continue(4)
+        else:
+            return animal_manager.stop_execution()
     else:   
-        return loot_manager.go_to_step_and_continue(3)
+        return animal_manager.go_to_step_and_continue(1)
 
 def step_4_Claim(device):
-    result_Claim = wait_for_icon_coordinates(device,"image/ClaimLoot.png", screen_region=(200, 600, 550, 1100) , timeout=2)
+    click_coordinates(device , 360 , 640)
+    time.sleep(0.5)
+    result_Claim = wait_for_icon_coordinates(device,"image/pets.png", screen_region=(180, 520, 530, 860) , timeout=2)
     if result_Claim:
         x,y = result_Claim 
-        click_coordinates(device , x , y)
         time.sleep(1)
+        click_coordinates(device , x , y)
+        time.sleep(0.5)
         return True
     else:
-        return True
+        return animal_manager.stop_execution()
 
 def step_5_Book_Loot(device):
-    Book_Loot = wait_for_icon_coordinates(device,"image/bookLoot.png",screen_region=(525, 550, 780, 1280) , timeout=2.5)
+    animal = BotDataManager.get_animal_by_device(CURRENT_DEVICE)
+    animal_flag = ["deer", "lion", "falcon", "wolf", "cheetah", "bear", "elephant", "bull", "dog"]
+    animal_index = animal_flag.index("deer")
+    Book_Loot = wait_for_icon(device,"image/petHouse.png",screen_region=(250, 0, 470, 110) , timeout=2.5)
     if Book_Loot:
-        x,y = Book_Loot 
-        click_coordinates(device , x , y)
-        result_Quick_Loot = wait_for_icon(device,"image/quickLoot.png",screen_region=(200, 800, 590, 1000) , timeout=3)
-        if result_Quick_Loot:
-            click_coordinates(device , 360 , 940)
-            time.sleep(0.3)
-            click_coordinates(device , 500 , 750)
-            time.sleep(0.3)
-            click_coordinates(device , 75 , 360)
-            click_coordinates(device , 75 , 360)
-            return True
-        else:
-            click_coordinates(device , 75 , 360)
-            click_coordinates(device , 75 , 360)
-            return True
-    else:
+        click_coordinates_repeat(device,535, 1100, animal_index , 0.5)
+        time.sleep(0.5)
         return True
+    else:
+        return animal_manager.go_to_step_and_continue(1)
 
 def step_6_Begin_Loot(device):
+    global outflow_import6
+
+    outflow_import6 += 1
+    if outflow_import6 >= 3:
+        return animal_manager.stop_execution()
+
     time.sleep(0.3)
-    click_coordinates(device , 360 , 65)
-    result_Begin_Loot = wait_for_icon_coordinates(device,"image/beginLoot.png",screen_region=(360, 1100, 780, 1280) , timeout=3)
+    result_Begin_Loot = wait_for_icon_coordinates(device,"image/patrol.png",screen_region=(0, 600, 150, 770) , timeout=3)
     if result_Begin_Loot:
+        x , y = result_Begin_Loot
+        click_coordinates(device , x , y)
         time.sleep(0.5)
-        click_coordinates(device , 575 , 1230)
-        result_Choose_Goods = wait_for_icon_coordinates(device,"image/ChooseGoods.png",screen_region=(200, 0, 700, 200) , timeout=3)
-        if result_Choose_Goods:
-            result_Choose_Convoy = wait_for_icon_coordinates(device,"image/ChooseConvoy.png",screen_region=(450, 380, 780, 500) , timeout=2)
-            if result_Choose_Convoy:
-                x , y = result_Choose_Convoy
-                click_coordinates(device , x , y)
-                time.sleep(0.3)
-                click_coordinates(device , 560 , 420)
-                time.sleep(0.3)
-                click_coordinates(device , 75 , 360)
-                time.sleep(0.3)
-                click_coordinates(device , 485 , 735)
-                time.sleep(0.3)
-                click_coordinates(device , 600 , 1170)
-                time.sleep(0.3)
-                click_coordinates(device , 485 , 735)
-                time.sleep(0.3)
-                clear_input_field(device)
-                time.sleep(0.3)
-                input_text(device , "5000")
-                time.sleep(0.3)
-                click_coordinates(device , 600 , 1170)
-                time.sleep(0.3)
-                click_coordinates(device , 360 , 1230)
-                time.sleep(0.3)
-                return loot_manager.go_to_step_and_continue(6)
-            else:
-                click_coordinates(device , 485 , 735)
-                time.sleep(0.3)
-                click_coordinates(device , 600 , 1170)
-                time.sleep(0.3)
-                click_coordinates(device , 485 , 735)
-                time.sleep(0.3)
-                clear_input_field(device)
-                time.sleep(0.3)
-                input_text(device , "5000")
-                time.sleep(0.3)
-                click_coordinates(device , 600 , 1170)
-                time.sleep(0.3)
-                click_coordinates(device , 360 , 1230)
-                time.sleep(0.3)
-                return loot_manager.go_to_step_and_continue(6)
-        else:
-            Clean_fast(device)
-            return True
+        return True
     else:
         Clean_fast(device)
-        return True
+        return animal_manager.stop_execution()
 
-loot_manager = None 
+def step_7_choose_animal(device):
+    result_Choose_Goods = wait_for_icon_coordinates(device,"image/patrol_2.png",screen_region=(290, 40, 430, 110) , timeout=2)
+    if result_Choose_Goods:
+        click_coordinates(device , 360 , 1210 )
+        time.sleep(0.3)
+        Clean_fast(device)
+        return animal_manager.stop_execution()
+    else:
+        return animal_manager.go_to_step_and_continue(6)
 
-def run_loot_stage(device_id: str = None):
+    
+animal_manager = None 
 
-    global loot_manager , CURRENT_DEVICE
+def run_animal(device_id: str = None):
+
+    global animal_manager , CURRENT_DEVICE
     
     try:
         # إنشاء مدير القوات عند أول تشغيل فقط
-        if loot_manager is None or (device_id and (loot_manager.device_id != device_id)):
-            loot_manager = TroopsManager6(device_id or DEVICE_ID)
+        if animal_manager is None or (device_id and (animal_manager.device_id != device_id)):
+            animal_manager = TroopsManager6(device_id or DEVICE_ID)
             CURRENT_DEVICE = device_id or DEVICE_ID
             
             # إضافة الخطوات
-            loot_manager.add_step(1, "فتح قائمة القوات", step_1_Clean_fast, "فتح قائمة القوات من القائمة الرئيسية")
-            loot_manager.add_step(2, "فتح قائمة القوات", step_2_open_loot_menu, "فتح قائمة القوات من القائمة الرئيسية")
-            loot_manager.add_step(3, "فتح قائمة القوات", step_3_Result_Loot, "فتح قائمة القوات من القائمة الرئيسية")
-            loot_manager.add_step(4, "فتح قائمة القوات", step_4_Claim, "فتح قائمة القوات من القائمة الرئيسية")
-            loot_manager.add_step(5, "فتح قائمة القوات", step_5_Book_Loot, "فتح قائمة القوات من القائمة الرئيسية")
-            loot_manager.add_step(6, "فتح قائمة القوات", step_6_Begin_Loot, "فتح قائمة القوات من القائمة الرئيسية")
-
-        loot_manager.execute_all_steps()
+            animal_manager.add_step(1, "فتح قائمة القوات", step_1_Clean_fast, "فتح قائمة القوات من القائمة الرئيسية")
+            animal_manager.add_step(2, "فتح قائمة القوات", step_2_open_loot_menu, "فتح قائمة القوات من القائمة الرئيسية")
+            animal_manager.add_step(3, "فتح قائمة القوات", step_3_Result_Loot, "فتح قائمة القوات من القائمة الرئيسية")
+            animal_manager.add_step(4, "فتح قائمة القوات", step_4_Claim, "فتح قائمة القوات من القائمة الرئيسية")
+            animal_manager.add_step(5, "فتح قائمة القوات", step_5_Book_Loot, "فتح قائمة القوات من القائمة الرئيسية")
+            animal_manager.add_step(6, "فتح قائمة القوات", step_6_Begin_Loot, "فتح قائمة القوات من القائمة الرئيسية")
+            animal_manager.add_step(7, "فتح قائمة القوات", step_7_choose_animal, "فتح قائمة القوات من القائمة الرئيسية")
+        animal_manager.execute_all_steps()
             
     except Exception as e:
         return False
 
 
 if __name__ == "__main__":
-    run_loot_stage(DEVICE_ID)
+    run_animal(DEVICE_ID)
 
     

@@ -15,6 +15,7 @@ from Path import run_Path , reset_Path
 def action_for_Ottman(device, x, y):
     time.sleep(120)
     device.click(x, y)
+    time.sleep(30)
 
 my_custom_actions = {
     "image/Ottman.png": action_for_Ottman, # عند رؤية هذه الصورة، سيشغل دالة التمرير
@@ -320,7 +321,8 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
 
     global my_custom_actions
     if target_icons is None:
-         target_icons = ["image/prev.png", "image/x.png", "image/disable.png", "image/prev2.png", "image/TryAgainGreen.png", "image/ok.png", "image/Ottman.png"]
+         import clean_fast_config
+         target_icons = clean_fast_config.TARGET_ICONS_HAMMER
     
     if custom_actions is None:
         custom_actions = my_custom_actions
@@ -436,7 +438,7 @@ def step_3_LORD2(device):
     if result_Hammer:
         x , y = result_Hammer
         click_coordinates(device , x , y)
-        time.sleep(0.2)
+        time.sleep(0.5)
         click_coordinates(device , 610 , 150)
         result_LORD2 = wait_for_icon_coordinates(device, "image/LORD2.png" ,screen_region=(0, 300, 720, 675),timeout=2)
         if result_LORD2:

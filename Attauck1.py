@@ -18,6 +18,7 @@ import subprocess
 def action_for_Ottman(device, x, y):
     time.sleep(120)
     device.click(x, y)
+    time.sleep(30)
 
 my_custom_actions = {
     "image/Ottman.png": action_for_Ottman, # عند رؤية هذه الصورة، سيشغل دالة التمرير
@@ -26,7 +27,7 @@ my_custom_actions = {
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DEVICE_ID = "127.0.0.1:5615"
+DEVICE_ID = "127.0.0.1:5625"
 scroll_Attempts = 0
 outflow_import = 0 
 outflow_import2 = 0 
@@ -344,7 +345,8 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
 
     global my_custom_actions
     if target_icons is None:
-         target_icons = ["image/prev.png", "image/x.png", "image/disable.png", "image/prev2.png", "image/TryAgainGreen.png", "image/ok.png", "image/Ottman.png"]
+         import clean_fast_config
+         target_icons = clean_fast_config.TARGET_ICONS_HAMMER
     
     if custom_actions is None:
         custom_actions = my_custom_actions
@@ -935,8 +937,14 @@ def step_5_Search(device):
         return Attauck_manager.go_to_step_and_continue(5)
 
 def step_6_Zone(device):
-    time.sleep(1)
-    click_coordinates(device , 360 , 625)
+    time.sleep(0.4)
+    result_Search_Sure2 = wait_for_icon(device , "image/sureAtt.png" , screen_region=(320, 430, 392, 630) , timeout=7)
+    if result_Search_Sure2:
+        click_coordinates(device , 360 , 625)
+    else:
+        click_coordinates(device , 360 , 625)
+
+
     result_Search_Sure = wait_for_icon_coordinates(device , "image/SearchSure.png" , screen_region=(200, 100, 530, 680) , timeout=2.5)
     if result_Search_Sure is None:
         Clean_fast(device)

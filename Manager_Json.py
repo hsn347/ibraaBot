@@ -12,6 +12,56 @@ import time
 import shutil
 from datetime import datetime
 
+# ============================================================================
+# إعدادات Supabase لتحديث حالة الحساب النشط
+# ============================================================================
+SUPABASE_URL = "https://api.ibraabot.online"
+SUPABASE_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4MDQyMzIwMCwiZXhwIjo0OTM2MDk2ODAwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.eLcQuZeglkZNELd49wQkrJYUblThBjQLK91HMTKCjhI"
+
+_supabase_client_mj = None
+def _get_supabase_client():
+    """إنشاء أو إرجاع عميل Supabase"""
+    global _supabase_client_mj
+    if _supabase_client_mj is None:
+        try:
+            from supabase import create_client
+            _supabase_client_mj = create_client(SUPABASE_URL, SUPABASE_KEY)
+        except Exception as e:
+            print(f"[SUPABASE] فشل إنشاء عميل Supabase: {e}")
+            return None
+    return _supabase_client_mj
+
+def _update_is_active_in_supabase(new_email, old_email):
+    """
+    تحديث عمود Is_Active في جدول Accounts في Supabase.
+    - الإيميل الجديد: Is_Active = true
+    - الإيميل السابق: Is_Active = false
+    يُنفَّذ في thread منفصل لتجنب تأخير البوت.
+    """
+    def _do_update():
+        try:
+            client = _get_supabase_client()
+            if client is None:
+                print("[SUPABASE] عميل Supabase غير متاح")
+                return
+
+            # تعيين الإيميل الجديد كنشط
+            if new_email:
+                client.table("Accounts").update({"Is_Active": True}).eq("Email", new_email).execute()
+                print(f"[SUPABASE] ✅ Is_Active=True → {new_email}")
+
+            # تعيين الإيميل السابق كغير نشط
+            if old_email and old_email != new_email:
+                client.table("Accounts").update({"Is_Active": False}).eq("Email", old_email).execute()
+                print(f"[SUPABASE] ❌ Is_Active=False → {old_email}")
+
+        except Exception as e:
+            print(f"[SUPABASE] خطأ في تحديث Is_Active: {e}")
+
+    # تشغيل التحديث في thread منفصل
+    t = threading.Thread(target=_do_update, daemon=True)
+    t.start()
+
 # استيراد مكتبات القفل حسب نظام التشغيل
 try:
     import msvcrt  # لـ Windows
@@ -232,20 +282,41 @@ MATERIALS_KEYS = [
 ]
 
 
+HARDCODED_EMULATORS = [
+    ("Rvc64", "5559"),
+    ("Rvc64_6", "5615"),
+    ("Rvc64_7", "5625"),
+    ("Rvc64_11", "5665"),
+    ("Rvc64_12", "5675"),
+    ("Rvc64_15", "5705"),
+]
+
 def extract_device_to_bot_mapping():
     file_path = r"C:\ProgramData\BlueStacks_nxt\bluestacks.conf"
     device_mapping = {}
     pattern = re.compile(r'bst\.instance\.(?P<name>[^.]+)\.adb_port="?([0-9]+)"?')
 
-    bot_index = 1
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            match = pattern.search(line)
-            if match:
-                port = match.group(2)
-                device_mapping[f"127.0.0.1:{port}"] = bot_index
-                bot_index += 1
+    if os.path.exists(file_path):
+        try:
+            bot_index = 1
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    match = pattern.search(line)
+                    if match:
+                        port = match.group(2)
+                        device_mapping[f"127.0.0.1:{port}"] = bot_index
+                        bot_index += 1
+            if device_mapping:
+                return device_mapping
+        except Exception as e:
+            print(f"[ERROR] Failed to read {file_path}: {e}")
 
+    # Fallback to hardcoded values
+    device_mapping = {}
+    bot_index = 1
+    for name, port in HARDCODED_EMULATORS:
+        device_mapping[f"127.0.0.1:{port}"] = bot_index
+        bot_index += 1
     return device_mapping
 
 DEVICE_TO_BOT_MAPPING = extract_device_to_bot_mapping()
@@ -469,6 +540,50 @@ class BotDataManager:
     @staticmethod
     def _get_json_file(bot_number):
         return f"bot_data/bot_{bot_number}_villages.json"
+
+    @staticmethod
+    def get_animal_by_device(device):
+        """
+        يجلب قيمة حقل animal للحساب الحالي بناءً على منفذ المحاكي.
+
+        Args:
+            device: منفذ المحاكي (مثال: "127.0.0.1:5555")
+
+        Returns:
+            str: قيمة حقل animal للحساب الحالي، أو "" إذا لم توجد.
+        """
+        try:
+            bot_number = BotDataManager.get_device_bot_number(device)
+            json_file  = BotDataManager._get_json_file(bot_number)
+
+            if not os.path.exists(json_file):
+                return ""
+
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            villages = data.get("villages", [])
+            if not villages:
+                return ""
+
+            index = data.get("account_index", 0)
+
+            # account_index == 0 يشير إلى آخر حساب في القائمة
+            if index == 0:
+                target = len(villages) - 1
+            else:
+                target = index - 1
+
+            # تأكد من أن الفهرس ضمن النطاق
+            if 0 <= target < len(villages):
+                return villages[target].get("animal", "")
+
+            return ""
+
+        except Exception as e:
+            print(f"[get_animal_by_device] خطأ: {e}")
+            return ""
+
 
     @staticmethod
     def load_bot_data(bot_number):
@@ -727,11 +842,42 @@ class BotDataManager:
         if bot_number is None:
             bot_number = BotDataManager.get_device_bot_number(device)
         data = BotDataManager.load_bot_data(bot_number)
-        if len(num_ACC) -1 <= data["account_index"] :
+        villages = data.get("villages", [])
+        old_index = data.get("account_index", 0)
+
+        # حساب الإيميل السابق (القديم) قبل التغيير
+        old_email = None
+        if villages:
+            if old_index == 0:
+                old_target = len(villages) - 1
+            else:
+                old_target = old_index - 1
+            if 0 <= old_target < len(villages):
+                old_email = villages[old_target].get("email", "")
+
+        # تحديث account_index
+        if len(num_ACC) - 1 <= data["account_index"]:
             data["account_index"] = 0
         else:
             data["account_index"] = data["account_index"] + 1
+
+        new_index = data["account_index"]
+
+        # حساب الإيميل الجديد بعد التغيير
+        new_email = None
+        if villages:
+            if new_index == 0:
+                new_target = len(villages) - 1
+            else:
+                new_target = new_index - 1
+            if 0 <= new_target < len(villages):
+                new_email = villages[new_target].get("email", "")
+
         BotDataManager.save_bot_data(bot_number, data)
+
+        # تحديث Is_Active في Supabase (thread منفصل)
+        if new_email or old_email:
+            _update_is_active_in_supabase(new_email, old_email)
 
     # ============================================================================
     # دوال إدارة المتغير الجديد (مثل account_index)
@@ -870,6 +1016,52 @@ class BotDataManager:
                 return account["bonus_run_count"]
         except Exception as e:
             print(f"[DEBUG] Error in increment_bot_bonus_run_count: {e}")
+        return 0
+
+    @staticmethod
+    def get_bot_animal_run_count(device, bot_number=None):
+        """إرجاع عدد مرات تشغيل animal للحساب الحالي في اليوم الحالي"""
+        try:
+            if bot_number is None:
+                bot_number = BotDataManager.get_device_bot_number(device)
+            index = BotDataManager.get_account_index(device, bot_number)
+            data = BotDataManager.load_bot_data(bot_number)
+            villages = data.get("villages", [])
+            if 0 <= index < len(villages):
+                account = villages[index]
+                today = datetime.now().strftime("%Y-%m-%d")
+                last_date = account.get("last_animal_date", "")
+                if last_date != today:
+                    return 0
+                return account.get("animal_run_count", 0)
+        except Exception as e:
+            print(f"[DEBUG] Error in get_bot_animal_run_count: {e}")
+        return 0
+
+    @staticmethod
+    def increment_bot_animal_run_count(device, bot_number=None):
+        """زيادة عدد مرات تشغيل animal وتحديث التاريخ"""
+        try:
+            if bot_number is None:
+                bot_number = BotDataManager.get_device_bot_number(device)
+            index = BotDataManager.get_account_index(device, bot_number)
+            data = BotDataManager.load_bot_data(bot_number)
+            villages = data.get("villages", [])
+            if 0 <= index < len(villages):
+                account = villages[index]
+                today = datetime.now().strftime("%Y-%m-%d")
+                last_date = account.get("last_animal_date", "")
+                
+                if last_date != today:
+                    account["animal_run_count"] = 1
+                    account["last_animal_date"] = today
+                else:
+                    account["animal_run_count"] = account.get("animal_run_count", 0) + 1
+                
+                BotDataManager.save_bot_data(bot_number, data)
+                return account["animal_run_count"]
+        except Exception as e:
+            print(f"[DEBUG] Error in increment_bot_animal_run_count: {e}")
         return 0
 
     @staticmethod
@@ -1098,13 +1290,24 @@ def extract_device_mapping():
     device_mapping = {}
     pattern = re.compile(r'bst\.instance\.(?P<name>[^.]+)\.adb_port="?([0-9]+)"?')
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            match = pattern.search(line)
-            if match:
-                instance_name = match.group("name")
-                port = match.group(2)
-                device_mapping[instance_name] = f"127.0.0.1:{port}"
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    match = pattern.search(line)
+                    if match:
+                        instance_name = match.group("name")
+                        port = match.group(2)
+                        device_mapping[instance_name] = f"127.0.0.1:{port}"
+            if device_mapping:
+                return device_mapping
+        except Exception as e:
+            print(f"[ERROR] Failed to read {file_path}: {e}")
+
+    # Fallback to hardcoded values
+    device_mapping = {}
+    for name, port in HARDCODED_EMULATORS:
+        device_mapping[name] = f"127.0.0.1:{port}"
     return device_mapping
 
 
@@ -1113,12 +1316,23 @@ def extract_ports_only():
     ports = []
     pattern = re.compile(r'bst\.instance\.[^.]+\.status\.adb_port="?([0-9]+)"?')
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            match = pattern.search(line)
-            if match:
-                port = match.group(1)
-                ports.append(f"127.0.0.1:{port}")
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    match = pattern.search(line)
+                    if match:
+                        port = match.group(1)
+                        ports.append(f"127.0.0.1:{port}")
+            if ports:
+                return ports
+        except Exception as e:
+            print(f"[ERROR] Failed to read {file_path}: {e}")
+
+    # Fallback to hardcoded values
+    ports = []
+    for name, port in HARDCODED_EMULATORS:
+        ports.append(f"127.0.0.1:{port}")
     return ports
 
 
@@ -1127,16 +1341,31 @@ def extract_instance_numbers():
     instance_numbers = []
     pattern = re.compile(r'bst\.instance\.(?P<name>[^.]+)\.status\.adb_port="?([0-9]+)"?')
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            match = pattern.search(line)
-            if match:
-                name = match.group("name")
-                if "_" in name:
-                    number = name.split("_")[-1]
-                else:
-                    number = "0"
-                instance_numbers.append(int(number))
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    match = pattern.search(line)
+                    if match:
+                        name = match.group("name")
+                        if "_" in name:
+                            number = name.split("_")[-1]
+                        else:
+                            number = "0"
+                        instance_numbers.append(int(number))
+            if instance_numbers:
+                return instance_numbers
+        except Exception as e:
+            print(f"[ERROR] Failed to read {file_path}: {e}")
+
+    # Fallback to hardcoded values
+    instance_numbers = []
+    for name, port in HARDCODED_EMULATORS:
+        if "_" in name:
+            number = name.split("_")[-1]
+        else:
+            number = "0"
+        instance_numbers.append(int(number))
     return instance_numbers
 
 
@@ -1145,12 +1374,23 @@ def extract_instance_names():
     instance_names = []
     pattern = re.compile(r'bst\.instance\.(?P<name>[^.]+)\.status\.adb_port="?([0-9]+)"?')
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            match = pattern.search(line)
-            if match:
-                name = match.group("name")   # هذا يرجع مثل Pie64_5
-                instance_names.append(name)
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    match = pattern.search(line)
+                    if match:
+                        name = match.group("name")   # هذا يرجع مثل Pie64_5
+                        instance_names.append(name)
+            if instance_names:
+                return instance_names
+        except Exception as e:
+            print(f"[ERROR] Failed to read {file_path}: {e}")
+
+    # Fallback to hardcoded values
+    instance_names = []
+    for name, port in HARDCODED_EMULATORS:
+        instance_names.append(name)
     return instance_names
 
 
@@ -1179,5 +1419,4 @@ def find_index(lst, value):
         return lst.index(value)
     except ValueError:
         return -1
-
 

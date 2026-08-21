@@ -18,6 +18,7 @@ from Path import run_Path , reset_Path
 def action_for_Ottman(device, x, y):
     time.sleep(120)
     device.click(x, y)
+    time.sleep(30)
 
 my_custom_actions = {
     "image/Ottman.png": action_for_Ottman, # عند رؤية هذه الصورة، سيشغل دالة التمرير
@@ -433,7 +434,8 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
 
     global my_custom_actions
     if target_icons is None:
-         target_icons = ["image/prev.png", "image/x.png", "image/disable.png", "image/prev2.png", "image/TryAgainGreen.png", "image/ok.png", "image/Ottman.png"]
+         import clean_fast_config
+         target_icons = clean_fast_config.TARGET_ICONS_DEFAULT
     
     if custom_actions is None:
         custom_actions = my_custom_actions

@@ -1,9 +1,4 @@
 import cv2
-from functools import lru_cache
-
-@lru_cache(maxsize=None)
-def cached_imread(image_path):
-    return cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 import numpy as np
 import time
 import threading
@@ -211,7 +206,8 @@ def reset_Hand():
 def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, max_attempts: int = 5) -> bool:
     global my_custom_actions
     if target_icons is None:
-         target_icons = ["image/prev.png", "image/x.png", "image/disable.png", "image/prev2.png", "image/EventNew.png", "image/ok.png", "image/Ottman.png"]
+         import clean_fast_config
+         target_icons = clean_fast_config.TARGET_ICONS_HAND
     
     if custom_actions is None:
         custom_actions = my_custom_actions
@@ -236,7 +232,7 @@ def Clean_fast(device, target_icons: list = None, custom_actions: dict = None, m
             
             for icon_path in target_icons:
                 try:
-                    icon = cached_imread(icon_path)
+                    icon = cv2.imread(icon_path, cv2.IMREAD_GRAYSCALE)
                     if icon is None:
                         continue
                         
@@ -337,7 +333,7 @@ def find_multiple_icons(device, icon_paths: List[str],
                     break
                     
                 try:
-                    icon = cached_imread(icon_path)
+                    icon = cv2.imread(icon_path, cv2.IMREAD_GRAYSCALE)
                     if icon is None:
                         continue
                     

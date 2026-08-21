@@ -22,13 +22,15 @@ from protection1 import run_Protection_stage ,reset_Protection
 from Troops1 import run_troops_stage, reset_Troops
 from Treasure import run_treasure_stage , reset_Treasure
 from Bounes import run_Bounes_stage , reset_Bounes
+from animal import run_animal , reset_animal
+from Resources_Reader import read_and_upload_resources
 
 # ============================================================================
 # Supabase Client
 # ============================================================================
 
 SUPABASE_URL = "https://api.ibraabot.online"   # <-- ضع رابط مشروعك هنا
-SUPABASE_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NTE1MTI0MCwiZXhwIjo0OTMwODI0ODQwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.l6g3dwSSv0gK2Ut0PEEgXj7KSGkmXjZXh66zl7KL8IM"               # <-- ضع مفتاحك هنا
+SUPABASE_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4MDQyMzIwMCwiZXhwIjo0OTM2MDk2ODAwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.eLcQuZeglkZNELd49wQkrJYUblThBjQLK91HMTKCjhI"               # <-- ضع مفتاحك هنا
 
 _supabase_client = None
 def get_supabase():
@@ -140,6 +142,7 @@ def fetch_supabase_data(
 def action_for_Ottman(device, x, y):
     time.sleep(120)
     device.click(x, y)
+    time.sleep(30)
 
 my_custom_actions = {
     "image/Ottman.png": action_for_Ottman, # عند رؤية هذه الصورة، سيشغل دالة التمرير
@@ -148,7 +151,7 @@ my_custom_actions = {
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DEVICE_ID = "" 
+DEVICE_ID = "127.0.0.1:5555" 
 
 outflow_import = 0 
 
@@ -384,15 +387,12 @@ def check_and_shutdown_if_empty(device_id: str):
         # 1) تحديد رقم البوت من المنفذ
         bot_number = BotDataManager.get_device_bot_number(device_id)
         if bot_number is None:
-            print(f"[check_and_shutdown] لم يُعثر على رقم بوت للمنفذ: {device_id}")
             return
 
         # 2) تحميل ملف JSON وفحص عدد الحسابات
         data = BotDataManager.load_bot_data(bot_number)
         villages = data.get("villages", []) if data else []
         accounts_count = len(villages)
-
-        print(f"[check_and_shutdown] بوت {bot_number} ({device_id}): عدد الحسابات = {accounts_count}")
 
         if accounts_count >= 2:
             # يوجد حسابان أو أكثر → خروج بدون فعل شيء
@@ -403,18 +403,29 @@ def check_and_shutdown_if_empty(device_id: str):
         # الـ GUI سيقوم بإيقاف البوت + إغلاق المحاكي
         # ═══════════════════════════════════════════════════
 
-        print(f"[check_and_shutdown] ⚠️ حسابات غير كافية ({accounts_count}) → إرسال إشارة إيقاف للـ GUI")
-
         shutdown_flag = f'shutdown_{device_id}.flag'
         try:
             with open(shutdown_flag, 'w') as f:
                 f.write('shutdown')
-            print(f"[check_and_shutdown] ✅ تم كتابة ملف الإيقاف: {shutdown_flag}")
-        except Exception as e:
-            print(f"[check_and_shutdown] ❌ فشل كتابة ملف الإيقاف: {e}")
+        except Exception:
+            pass
 
-    except Exception as e:
-        print(f"[check_and_shutdown] ❌ خطأ عام: {e}")
+    except Exception:
+        pass
+
+
+def check_resources(device_id: str):
+    """
+    قراءة موارد الحساب عبر المنفذ فقط (صامتة وخفيفة).
+    """
+    try:
+        import uiautomator2 as u2
+        device = u2.connect(device_id)
+        # القراءة تتم في مسار مستقل (Thread) لكي لا توقف سير العمل الأساسي
+        read_and_upload_resources(device, device_id, run_in_thread=True)
+        return True
+    except Exception:
+        return False
 
 
 def REST_POWER():
@@ -447,13 +458,18 @@ def step_1_2(device):
     return True
 
 def step_2_2(device):
+    
     reset_Treasure()
     run_treasure_stage(DEVICE_ID)
+    
     return True
 
 def step_3_2(device):
     reset_Email()
     run_email_stage(DEVICE_ID)
+
+    check_resources(DEVICE_ID)
+
     return True
 
 def step_4_2(device):
@@ -477,6 +493,16 @@ def step_7_2(device):
 
     reset_Alliance()
     run_Alliance_stage(DEVICE_ID)
+
+    animal = BotDataManager.get_animal_by_device(DEVICE_ID)
+
+    if animal != "":
+        run_count = BotDataManager.get_bot_animal_run_count(DEVICE_ID)
+        if run_count < 4:
+            reset_animal()
+            run_animal(DEVICE_ID)
+            BotDataManager.increment_bot_animal_run_count(DEVICE_ID)
+            return True
 
     TroopsBooleane = BotDataManager.get_bot_Troops(DEVICE_ID)
     if TroopsBooleane:
